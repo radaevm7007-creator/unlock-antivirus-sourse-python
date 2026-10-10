@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""UnlockAntivirus 9.2 — без блюра при появлении."""
+"""UnlockAntivirus 9.2"""
 import os, sys, json, time, math, queue, hashlib, shutil, threading, ctypes
 import subprocess
 import tkinter as tk
