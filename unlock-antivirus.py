@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""UnlockAntivirus 11.0 — Hypervisual. ~100 эффектов, 12 тем, кастомный цвет."""
+"""UnlockAntivirus 11.3 — Hypervisual + оптимизация интернета (fix)."""
 import os, sys, json, time, math, queue, hashlib, shutil, threading, ctypes, random
-import subprocess, socket, re, webbrowser
+import subprocess, socket, re
 import tkinter as tk
 from tkinter import filedialog, messagebox, colorchooser
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.request import urlopen, Request
 
-APP, VER = "UnlockAntivirus", "11.0"
+APP, VER = "UnlockAntivirus", "11.3"
 BASE = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), APP)
 os.makedirs(BASE, exist_ok=True)
 SIG = os.path.join(BASE, "signatures.json")
@@ -19,7 +19,6 @@ os.makedirs(QUAR, exist_ok=True)
 WIN = sys.platform == "win32"
 CF = 0x08000000 if WIN else 0
 
-# ═══════ ТЕМЫ ═══════
 THEMES = {
     "Mint":    {"ac":"#22d3a5","ac2":"#14b8a6","acs":"#10332b","bl":"#38bdf8","pu":"#a78bfa","rd":"#ff5f57","yl":"#febc2e","gr":"#28c840"},
     "Ocean":   {"ac":"#38bdf8","ac2":"#0ea5e9","acs":"#0c2a3e","bl":"#22d3a5","pu":"#818cf8","rd":"#f87171","yl":"#fbbf24","gr":"#34d399"},
@@ -126,7 +125,6 @@ def round_win(root):
         ctypes.windll.dwmapi.DwmSetWindowAttribute(h, 20, ctypes.byref(ctypes.c_int(1)), 4)
     except: pass
 
-# ═══════ WinAPI ═══════
 if WIN:
     from ctypes import wintypes
     k32 = ctypes.windll.kernel32
@@ -274,7 +272,6 @@ def fetch(url, timeout=60):
     with urlopen(Request(url, headers={"User-Agent":f"{APP}/{VER}"}), timeout=timeout) as r:
         return r.read()
 
-# ═══════ БАЗА СИГНАТУР ═══════
 class DB:
     def __init__(self):
         d = lj(SIG, {"sha256":[],"md5":[],"updated":None})
@@ -451,20 +448,22 @@ class Auto:
                 return True
         except: return False
 
-# ═════════════════════════════════════════════════════════
-# ВИЗУАЛЬНЫЕ ВИДЖЕТЫ (30+)
-# ═════════════════════════════════════════════════════════
-
+# ═══════ ВИДЖЕТЫ ═══════
 class AuroraBG(tk.Canvas):
-    """Плазменный градиентный фон с 4 переливающимися пятнами."""
     def __init__(self, master, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
         self._t = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(50, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
-            if self.winfo_viewable(): self._t += 0.012; self._draw()
+            if self.winfo_viewable():
+                self._t += 0.012; self._draw()
         except: pass
         self.after(60, self._tick)
     def _draw(self):
@@ -484,21 +483,25 @@ class AuroraBG(tk.Canvas):
                 self.create_oval(cx-r*t, cy-r*t, cx+r*t, cy+r*t, fill=c, outline="")
 
 class ParticleField(tk.Canvas):
-    """Plexus-частицы с соединяющими линиями."""
-    def __init__(self, master, count=45, color_fn=None, **kw):
+    def __init__(self, master, count=30, color_fn=None, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
         self.count = count; self.color_fn = color_fn or AC
+        self._alive = True
         self.parts = []
         self.bind("<Configure>", lambda e: self._init())
+        self.bind("<Destroy>", self._on_destroy)
         self._init()
         self.after(50, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _init(self):
         w = self.winfo_width() or 1000; h = self.winfo_height() or 700
         self.parts = [[random.uniform(0,w),random.uniform(0,h),
                        random.uniform(-0.6,0.6),random.uniform(-0.6,0.6),
                        random.uniform(1.2,3.2)] for _ in range(self.count)]
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
             if self.winfo_viewable():
                 w, h = self.winfo_width(), self.winfo_height()
@@ -531,62 +534,136 @@ class ParticleField(tk.Canvas):
             c2 = lerp(BG(), col, 0.25)
             self.create_oval(p[0]-r*2.5,p[1]-r*2.5,p[0]+r*2.5,p[1]+r*2.5,fill="",outline=c2)
 
-class MatrixRain(tk.Canvas):
-    """Матричный дождь символов."""
-    def __init__(self, master, **kw):
+class StarField(tk.Canvas):
+    def __init__(self, master, count=50, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.cols = []
+        self.count = count
+        self._alive = True
+        self.stars = []
         self.bind("<Configure>", lambda e: self._init())
+        self.bind("<Destroy>", self._on_destroy)
         self._init()
-        self.after(80, self._tick)
+        self.after(60, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _init(self):
-        w = self.winfo_width() or 800
-        n = w // 20
-        self.cols = [{"x":i*20,"y":random.randint(-500,0),
-                      "v":random.uniform(3,8),"ch":[]} for i in range(n)]
-        for c in self.cols:
-            c["ch"] = [random.choice("01アイウエオカキクケコサシスセソタチツテト") for _ in range(20)]
+        w = self.winfo_width() or 800; h = self.winfo_height() or 600
+        self.stars = [[random.uniform(0,w), random.uniform(0,h),
+                       random.uniform(0.15,1.2), random.choice([0.5,0.8,1.2,1.6])]
+                      for _ in range(self.count)]
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
-            if self.winfo_viewable(): self._draw()
+            if self.winfo_viewable():
+                w, h = self.winfo_width(), self.winfo_height()
+                for s in self.stars:
+                    s[0] += s[2]
+                    if s[0] > w: s[0] = 0; s[1] = random.uniform(0,h)
+                self._draw()
         except: pass
-        self.after(90, self._tick)
+        self.after(70, self._tick)
     def _draw(self):
         self.delete("all")
-        h = self.winfo_height()
         col = AC()
-        for c in self.cols:
-            c["y"] += c["v"]
-            if c["y"] > h + 400:
-                c["y"] = random.randint(-500, -100)
-                c["v"] = random.uniform(3,8)
-            for i, ch in enumerate(c["ch"]):
-                y = c["y"] - i*20
-                if 0 <= y <= h:
-                    alpha = max(0, 1 - i/len(c["ch"]))
-                    cc = lerp(BG(), col, alpha*0.55)
-                    try: self.create_text(c["x"], y, text=ch, fill=cc, font=F(11,m=True), anchor="nw")
-                    except: pass
+        for x, y, v, r in self.stars:
+            alpha = min(1.0, v*0.5)
+            c = lerp(BG(), col, alpha)
+            self.create_oval(x-r, y-r, x+r, y+r, fill=c, outline="")
+            self.create_line(x, y, x-v*4, y, fill=c, width=1)
 
-class GridPulse(tk.Canvas):
-    """Пульсирующая сетка."""
+class CometTrail(tk.Canvas):
+    def __init__(self, master, **kw):
+        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
+        self._alive = True
+        self.comets = [self._new() for _ in range(4)]
+        self.bind("<Destroy>", self._on_destroy)
+        self.after(40, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
+    def _new(self):
+        return {"x":-100, "y":random.uniform(0,700),
+                "vx":random.uniform(4,8), "vy":random.uniform(-1,1),
+                "life":random.randint(150,300), "trail":[]}
+    def _tick(self):
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            w, h = self.winfo_width(), self.winfo_height()
+            for i, c in enumerate(self.comets):
+                c["x"] += c["vx"]; c["y"] += c["vy"]; c["life"] -= 1
+                c["trail"].append((c["x"], c["y"]))
+                if len(c["trail"]) > 25: c["trail"].pop(0)
+                if c["x"] > w+50 or c["life"] <= 0:
+                    self.comets[i] = self._new()
+            self._draw()
+        except: pass
+        self.after(45, self._tick)
+    def _draw(self):
+        self.delete("all")
+        col = AC()
+        for c in self.comets:
+            for i, (x, y) in enumerate(c["trail"]):
+                t = i/len(c["trail"]) if c["trail"] else 0
+                alpha = t*0.7
+                r = max(1, 4*t)
+                cc = lerp(BG(), col, alpha)
+                self.create_oval(x-r, y-r, x+r, y+r, fill=cc, outline="")
+
+class Nebula(tk.Canvas):
     def __init__(self, master, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
         self._t = 0.0
-        self.after(60, self._tick)
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
+        self.after(100, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
-            if self.winfo_viewable(): self._t += 0.05; self._draw()
+            if self.winfo_viewable():
+                self._t += 0.008; self._draw()
+        except: pass
+        self.after(110, self._tick)
+    def _draw(self):
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 40 or h < 40: return
+        self.delete("all")
+        for i in range(6):
+            cx = w*(0.5 + 0.3*math.sin(self._t + i*1.0))
+            cy = h*(0.5 + 0.3*math.cos(self._t*0.8 + i*1.2))
+            r = 180 + i*40
+            col = [AC(), BL(), PU(), AC2(), BL(), PU()][i]
+            alpha = 0.04 + 0.02*math.sin(self._t*2+i)
+            for j in range(10, 0, -1):
+                t = j/10
+                c = lerp(BG(), col, alpha*t)
+                self.create_oval(cx-r*t, cy-r*t, cx+r*t, cy+r*t, fill=c, outline="")
+
+class GridPulse(tk.Canvas):
+    def __init__(self, master, **kw):
+        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
+        self._t = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
+        self.after(60, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
+    def _tick(self):
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            if self.winfo_viewable():
+                self._t += 0.05; self._draw()
         except: pass
         self.after(70, self._tick)
     def _draw(self):
         w, h = self.winfo_width(), self.winfo_height()
         if w < 20 or h < 20: return
         self.delete("all")
-        base = 50
-        col = AC()
+        base = 50; col = AC()
         for x in range(0, w+base, base):
             alpha = (math.sin(self._t + x*0.02)+1)/2
             c = lerp(BG(), col, 0.04 + alpha*0.03)
@@ -597,15 +674,21 @@ class GridPulse(tk.Canvas):
             self.create_line(0, y, w, y, fill=c)
 
 class ScanLine(tk.Canvas):
-    """Бегущая линия сканирования."""
     def __init__(self, master, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
         self._y = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(30, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
-            if self.winfo_viewable(): self._y = (self._y + 4) % (self.winfo_height() or 1); self._draw()
+            if self.winfo_viewable():
+                self._y = (self._y + 4) % (self.winfo_height() or 1)
+                self._draw()
         except: pass
         self.after(35, self._tick)
     def _draw(self):
@@ -621,14 +704,20 @@ class ScanLine(tk.Canvas):
                 self.create_line(0, y, w, y, fill=c, width=max(1, 3-i//7))
 
 class Crosshair(tk.Canvas):
-    """Прицел поверх области."""
     def __init__(self, master, **kw):
         super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
         self._t = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(60, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.03; self._draw()
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            if self.winfo_viewable():
+                self._t += 0.03; self._draw()
         except: pass
         self.after(70, self._tick)
     def _draw(self):
@@ -648,59 +737,23 @@ class Crosshair(tk.Canvas):
         self.create_oval(cx-8, cy-8, cx+8, cy+8, outline=c2, width=1)
         self.create_oval(cx-2, cy-2, cx+2, cy+2, fill=c2, outline="")
 
-class Radar(tk.Canvas):
-    """Радар с вращающимся лучом."""
-    def __init__(self, master, size=160, **kw):
-        super().__init__(master, width=size, height=size, highlightthickness=0, bg=BG(), **kw)
-        self.size = size; self._angle = 0
-        self.after(40, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._angle = (self._angle + 3) % 360; self._draw()
-        except: pass
-        self.after(45, self._tick)
-    def _draw(self):
-        self.delete("all")
-        s = self.size; cx = cy = s/2; r = s*0.42
-        col = AC()
-        for i in range(1, 5):
-            rr_ = r * i/4
-            self.create_oval(cx-rr_, cy-rr_, cx+rr_, cy+rr_,
-                             outline=lerp(BG(), col, 0.2), width=1)
-        for a in range(0, 360, 30):
-            rad = math.radians(a)
-            self.create_line(cx, cy,
-                             cx+r*math.cos(rad), cy+r*math.sin(rad),
-                             fill=lerp(BG(), col, 0.15))
-        for i in range(30):
-            a = self._angle - i*2
-            rad = math.radians(a)
-            alpha = (1 - i/30) * 0.7
-            c = lerp(BG(), col, alpha)
-            self.create_line(cx, cy,
-                             cx+r*math.cos(rad), cy+r*math.sin(rad),
-                             fill=c, width=2)
-        rp = (math.sin(self._angle*0.05*math.pi)+1)/2
-        for _ in range(3):
-            px = random.uniform(cx-r*0.8, cx+r*0.8)
-            py = random.uniform(cy-r*0.8, cy+r*0.8)
-            if (px-cx)**2 + (py-cy)**2 < (r*0.8)**2:
-                c = lerp(BG(), GR(), rp*0.8)
-                self.create_oval(px-2, py-2, px+2, py+2, fill=c, outline="")
-
 class ShieldCanvas(tk.Canvas):
-    """Щит с вращением, ripple, пульсацией."""
     def __init__(self, master, size=200):
         super().__init__(master, width=size, height=size, bg=BG2(), highlightthickness=0)
         self.size = size; self.state = "idle"; self.angle = 0; self.pulse = 0
         self.ripple = 1.0; self._shake = 0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(40, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def set_state(self, st):
         if st == self.state: return
         self.state = st; self.ripple = 0.0
         if st == "threat": self._shake = 8
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
             self.angle = (self.angle + 8) % 360
             self.pulse = (math.sin(time.time()*3)+1)/2
@@ -770,16 +823,20 @@ class ShieldCanvas(tk.Canvas):
                 self.create_oval(x-4,y-4,x+4,y+4, fill="#04120e", outline="")
 
 class RingGauge(tk.Canvas):
-    """Круговой gauge с glow и плавной заливкой."""
     def __init__(self, master, size=130, label="CPU", color_fn=None):
         super().__init__(master, width=size, height=size, bg=BG2(), highlightthickness=0)
         self.size = size; self.label = label
         self.color_fn = color_fn or AC
         self.val = 0.0; self.target = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(40, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def set(self, v): self.target = max(0.0, min(1.0, v))
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
             self.val += (self.target - self.val) * 0.12
             self._draw()
@@ -813,7 +870,6 @@ class RingGauge(tk.Canvas):
         self.create_text(cx, cy+16, text=self.label, fill=MUT(), font=F(9))
 
 class SparkLine(tk.Canvas):
-    """Живой график с area fill."""
     def __init__(self, master, height=70, color_fn=None, samples=60):
         super().__init__(master, height=height, bg=BG2(), highlightthickness=0)
         self.color_fn = color_fn or AC
@@ -846,15 +902,21 @@ class SparkLine(tk.Canvas):
             self.create_line(x1,y1,x2,y2, fill=col, width=2)
 
 class WaveViz(tk.Canvas):
-    """Звуковая волна."""
     def __init__(self, master, height=60, color_fn=None):
         super().__init__(master, height=height, bg=BG2(), highlightthickness=0)
         self.color_fn = color_fn or AC
         self._t = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(50, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.15; self._draw()
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            if self.winfo_viewable():
+                self._t += 0.15; self._draw()
         except: pass
         self.after(55, self._tick)
     def _draw(self):
@@ -873,383 +935,16 @@ class WaveViz(tk.Canvas):
             c = lerp(BG2(), col, 0.4 + v*0.4)
             self.create_rectangle(x, y, x+bar_w, y+bh, fill=c, outline="")
 
-class Equalizer(tk.Canvas):
-    """Эквалайзер."""
-    def __init__(self, master, height=50, color_fn=None):
-        super().__init__(master, height=height, bg=BG2(), highlightthickness=0)
-        self.color_fn = color_fn or AC
-        self.bars = [random.random() for _ in range(16)]
-        self.targets = list(self.bars)
-        self.after(80, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            for i in range(len(self.bars)):
-                if abs(self.bars[i]-self.targets[i]) < 0.05:
-                    self.targets[i] = random.random()
-                self.bars[i] += (self.targets[i]-self.bars[i])*0.15
-            self._draw()
-        except: pass
-        self.after(85, self._tick)
-    def _draw(self):
-        self.delete("all")
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 20: return
-        col = self.color_fn()
-        n = len(self.bars); bw = w/n - 3
-        for i, v in enumerate(self.bars):
-            x = i*(bw+3)
-            bh = v*h*0.9
-            y = h - bh
-            c = lerp(BG2(), col, 0.4 + v*0.5)
-            self.create_rectangle(x, y, x+bw, h, fill=c, outline="")
-
-class RippleGrid(tk.Canvas):
-    """Сетка с волнами расходящимися из центра."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self._t = 0.0
-        self.after(60, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.08; self._draw()
-        except: pass
-        self.after(65, self._tick)
-    def _draw(self):
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 20 or h < 20: return
-        self.delete("all")
-        cx, cy = w/2, h/2
-        col = AC()
-        for r in range(0, int(max(w,h)), 30):
-            alpha = (math.sin(self._t - r*0.03)+1)/2 * 0.3
-            c = lerp(BG(), col, alpha)
-            self.create_oval(cx-r, cy-r, cx+r, cy+r, outline=c, width=1)
-
-class StarField(tk.Canvas):
-    """Звёздное поле."""
-    def __init__(self, master, count=80, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.count = count
-        self.stars = []
-        self.bind("<Configure>", lambda e: self._init())
-        self._init()
-        self.after(60, self._tick)
-    def _init(self):
-        w = self.winfo_width() or 800; h = self.winfo_height() or 600
-        self.stars = [[random.uniform(0,w), random.uniform(0,h),
-                       random.uniform(0.15,1.2), random.choice([0.5,0.8,1.2,1.6])] for _ in range(self.count)]
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            if self.winfo_viewable():
-                w, h = self.winfo_width(), self.winfo_height()
-                for s in self.stars:
-                    s[0] += s[2]
-                    if s[0] > w: s[0] = 0; s[1] = random.uniform(0,h)
-                self._draw()
-        except: pass
-        self.after(70, self._tick)
-    def _draw(self):
-        self.delete("all")
-        col = AC()
-        for x, y, v, r in self.stars:
-            alpha = min(1.0, v*0.5)
-            c = lerp(BG(), col, alpha)
-            self.create_oval(x-r, y-r, x+r, y+r, fill=c, outline="")
-            self.create_line(x, y, x-v*4, y, fill=c, width=1)
-
-class CometTrail(tk.Canvas):
-    """Комета с хвостом."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.comets = []
-        for _ in range(4):
-            self.comets.append(self._new())
-        self.after(40, self._tick)
-    def _new(self):
-        return {"x":-100, "y":random.uniform(0,700),
-                "vx":random.uniform(4,8), "vy":random.uniform(-1,1),
-                "life":random.randint(150,300), "trail":[]}
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            w, h = self.winfo_width(), self.winfo_height()
-            for c in self.comets:
-                c["x"] += c["vx"]; c["y"] += c["vy"]; c["life"] -= 1
-                c["trail"].append((c["x"], c["y"]))
-                if len(c["trail"]) > 25: c["trail"].pop(0)
-                if c["x"] > w+50 or c["life"] <= 0: self.comets[self.comets.index(c)] = self._new()
-            self._draw()
-        except: pass
-        self.after(45, self._tick)
-    def _draw(self):
-        self.delete("all")
-        col = AC()
-        for c in self.comets:
-            for i, (x, y) in enumerate(c["trail"]):
-                t = i/len(c["trail"]) if c["trail"] else 0
-                alpha = t*0.7
-                r = max(1, 4*t)
-                cc = lerp(BG(), col, alpha)
-                self.create_oval(x-r, y-r, x+r, y+r, fill=cc, outline="")
-
-class Nebula(tk.Canvas):
-    """Туманность."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self._t = 0.0
-        self.after(100, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.008; self._draw()
-        except: pass
-        self.after(110, self._tick)
-    def _draw(self):
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 40 or h < 40: return
-        self.delete("all")
-        for i in range(6):
-            cx = w*(0.5 + 0.3*math.sin(self._t + i*1.0))
-            cy = h*(0.5 + 0.3*math.cos(self._t*0.8 + i*1.2))
-            r = 180 + i*40
-            col = [AC(), BL(), PU(), AC2(), BL(), PU()][i]
-            alpha = 0.04 + 0.02*math.sin(self._t*2+i)
-            for j in range(10, 0, -1):
-                t = j/10
-                c = lerp(BG(), col, alpha*t)
-                self.create_oval(cx-r*t, cy-r*t, cx+r*t, cy+r*t, fill=c, outline="")
-
-class BinaryRain(tk.Canvas):
-    """Дождь из 0 и 1."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.cols = []
-        self.bind("<Configure>", lambda e: self._init())
-        self._init()
-        self.after(100, self._tick)
-    def _init(self):
-        w = self.winfo_width() or 800
-        n = w//18
-        self.cols = [{"x":i*18,"y":random.randint(-600,0),"v":random.uniform(2,6),
-                      "ch":[random.choice("01") for _ in range(30)]} for i in range(n)]
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            if self.winfo_viewable(): self._draw()
-        except: pass
-        self.after(110, self._tick)
-    def _draw(self):
-        self.delete("all")
-        h = self.winfo_height()
-        for c in self.cols:
-            c["y"] += c["v"]
-            if c["y"] > h+600:
-                c["y"] = random.randint(-600,-100)
-            for i, ch in enumerate(c["ch"]):
-                y = c["y"] - i*18
-                if 0 <= y <= h:
-                    alpha = max(0, 1 - i/len(c["ch"]))
-                    col = GR()
-                    cc = lerp(BG(), col, alpha*0.7)
-                    self.create_text(c["x"], y, text=ch, fill=cc, font=F(11,m=True), anchor="nw")
-
-class Cards3D(tk.Canvas):
-    """3D-карточки парят и наклоняются."""
-    def __init__(self, master, labels=None, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.labels = labels or ["A","B","C","D"]
-        self._t = 0.0
-        self.after(60, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.03; self._draw()
-        except: pass
-        self.after(65, self._tick)
-    def _draw(self):
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 100 or h < 60: return
-        self.delete("all")
-        n = len(self.labels)
-        cw = w/(n+1)
-        col = AC()
-        for i, lab in enumerate(self.labels):
-            cx = (i+1)*cw
-            cy = h/2 + 8*math.sin(self._t + i)
-            cw_ = cw*0.75
-            ch_ = h*0.6
-            skew = 4*math.sin(self._t*1.3 + i*0.7)
-            pts = [cx-cw_/2+skew, cy-ch_/2,
-                   cx+cw_/2+skew, cy-ch_/2+skew*0.3,
-                   cx+cw_/2-skew, cy+ch_/2,
-                   cx-cw_/2-skew, cy+ch_/2-skew*0.3]
-            c = lerp(BG(), col, 0.1 + 0.05*math.sin(self._t+i))
-            self.create_polygon(pts, fill=c, outline=lerp(BG(), col, 0.5), width=1)
-            self.create_text(cx, cy, text=lab, fill=TX(), font=F(14, "bold"))
-
-class HexGrid(tk.Canvas):
-    """Гексагональная сетка."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self._t = 0.0
-        self.after(80, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 0.04; self._draw()
-        except: pass
-        self.after(85, self._tick)
-    def _draw(self):
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 40 or h < 40: return
-        self.delete("all")
-        size = 22
-        col = AC()
-        for row, y in enumerate(range(-10, h+size, int(size*1.5))):
-            for col_idx, x in enumerate(range(-10, w+size, int(size*1.7))):
-                off = size*0.85 if row%2 else 0
-                cx, cy = x+off, y
-                alpha = (math.sin(self._t + row*0.3 + col_idx*0.2)+1)/2 * 0.2
-                pts = []
-                for a in range(0, 360, 60):
-                    rad = math.radians(a)
-                    pts.append(cx+size*0.5*math.cos(rad))
-                    pts.append(cy+size*0.5*math.sin(rad))
-                c = lerp(BG(), col, alpha)
-                self.create_polygon(pts, fill="", outline=c, width=1)
-
-class Lightning(tk.Canvas):
-    """Молнии."""
-    def __init__(self, master, **kw):
-        super().__init__(master, highlightthickness=0, bd=0, bg=BG(), **kw)
-        self.bolts = []
-        self.after(200, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            if random.random() < 0.15:
-                self._make_bolt()
-            self.bolts = [(b[0][:-1], b[1]-1) for b in self.bolts if b[1] > 0]
-            self._draw()
-        except: pass
-        self.after(60, self._tick)
-    def _make_bolt(self):
-        w = self.winfo_width(); h = self.winfo_height()
-        pts = [(random.uniform(0,w), 0)]
-        x, y = pts[0]
-        while y < h*0.8:
-            x += random.uniform(-25, 25); y += random.uniform(15, 35)
-            pts.append((x, y))
-        self.bolts.append((pts, 6))
-    def _draw(self):
-        self.delete("all")
-        for pts, life in self.bolts:
-            alpha = life/6
-            col = lerp(BG(), YL(), alpha*0.9)
-            for i in range(len(pts)-1):
-                self.create_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1],
-                                 fill=col, width=2)
-
-class LoadingDots(tk.Canvas):
-    """Три прыгающие точки."""
-    def __init__(self, master, **kw):
-        super().__init__(master, width=60, height=20, bg=BG(), highlightthickness=0, **kw)
-        self._t = 0
-        self.after(70, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._t += 1; self._draw()
-        except: pass
-        self.after(75, self._tick)
-    def _draw(self):
-        self.delete("all")
-        for i in range(3):
-            phase = self._t*0.15 + i*0.7
-            y = 10 - abs(math.sin(phase)) * 6
-            col = lerp(BG(), AC(), 0.4 + 0.6*abs(math.sin(phase)))
-            self.create_oval(10+i*18-4, y-4, 10+i*18+4, y+4, fill=col, outline="")
-
-class Spinner(tk.Canvas):
-    """Крутящийся спиннер."""
-    def __init__(self, master, size=40, **kw):
-        super().__init__(master, width=size, height=size, bg=BG(), highlightthickness=0, **kw)
-        self.size = size; self._a = 0
-        self.after(40, self._tick)
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._a = (self._a + 8) % 360; self._draw()
-        except: pass
-        self.after(45, self._tick)
-    def _draw(self):
-        self.delete("all")
-        s = self.size; cx = cy = s/2; r = s*0.4
-        for i in range(8):
-            a = self._a + i*45
-            rad = math.radians(a)
-            x1 = cx+r*0.7*math.cos(rad); y1 = cy+r*0.7*math.sin(rad)
-            x2 = cx+r*math.cos(rad); y2 = cy+r*math.sin(rad)
-            alpha = 1 - i/8
-            c = lerp(BG(), AC(), alpha*0.9)
-            self.create_line(x1, y1, x2, y2, fill=c, width=2, capstyle="round")
-
-class TypewriterLabel(tk.Label):
-    """Текст появляется по буквам."""
-    def __init__(self, master, text, delay=40, **kw):
-        super().__init__(master, text="", **kw)
-        self._full = text; self._delay = delay; self._i = 0
-        self.after(300, self._step)
-    def _step(self):
-        if not self.winfo_exists(): return
-        if self._i <= len(self._full):
-            self.configure(text=self._full[:self._i])
-            self._i += 1
-            self.after(self._delay, self._step)
-
-class ScrambleLabel(tk.Label):
-    """Текст-скремблер."""
-    def __init__(self, master, text, **kw):
-        super().__init__(master, text=text, **kw)
-        self._final = text; self._cur = [random.choice("!@#$%^&*()") for _ in text]
-        self._i = 0
-        self.after(500, self._step)
-    def _step(self):
-        if not self.winfo_exists(): return
-        chars = list(self._final)
-        out = []
-        for i, ch in enumerate(chars):
-            if i < self._i: out.append(ch)
-            elif ch == " ": out.append(" ")
-            else: out.append(random.choice("!@#$%^&*()<>?/|"))
-        self.configure(text="".join(out))
-        self._i += 1
-        if self._i <= len(self._full if hasattr(self,"_full") else self._final):
-            self.after(40, self._step)
-
-class AnimatedCounter(tk.Label):
-    """Число плавно докручивается."""
-    def __init__(self, master, value=0, fmt=None, **kw):
-        super().__init__(master, text=(fmt or (lambda v: f"{int(v):,}"))(0), **kw)
-        self._val = 0.0; self._target = value
-        self._fmt = fmt or (lambda v: f"{int(v):,}")
-        self.after(30, self._step)
-    def set(self, v): self._target = v
-    def _step(self):
-        if not self.winfo_exists(): return
-        try:
-            if abs(self._val - self._target) > 0.5:
-                self._val += (self._target - self._val) * 0.15
-                self.configure(text=self._fmt(self._val))
-            else:
-                self._val = self._target
-                self.configure(text=self._fmt(self._val))
-        except: pass
-        self.after(30, self._step)
-
 class GradientProgress(tk.Canvas):
-    """Прогресс-бар с градиентом и бегущим бликом."""
     def __init__(self, master, height=12):
         super().__init__(master, height=height, highlightthickness=0, bg=BG2())
         self._val = 0.0; self._offset = 0; self._running = False
+        self._alive = True
         self.bind("<Configure>", lambda e: self._draw())
+        self.bind("<Destroy>", self._on_destroy)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def set(self, v):
         self._val = max(0, min(1, v)); self._draw()
     def start(self):
@@ -1258,7 +953,7 @@ class GradientProgress(tk.Canvas):
     def stop(self):
         self._running = False
     def _loop(self):
-        if not self.winfo_exists() or not self._running: return
+        if not self._alive or not self.winfo_exists() or not self._running: return
         self._offset = (self._offset + 4) % 100
         self._draw()
         self.after(40, self._loop)
@@ -1285,45 +980,21 @@ class GradientProgress(tk.Canvas):
                 if 0 <= xp < fw:
                     self.create_rectangle(xp, 1, xp+3, h-1, fill=col, outline="")
 
-class CircularProgress(tk.Canvas):
-    """Круговой прогресс с процентами."""
-    def __init__(self, master, size=90, color_fn=None):
-        super().__init__(master, width=size, height=size, bg=BG2(), highlightthickness=0)
-        self.size = size; self.color_fn = color_fn or AC
-        self._val = 0.0; self._disp = 0.0
-        self.after(40, self._tick)
-    def set(self, v): self._val = max(0, min(1, v))
-    def _tick(self):
-        if not self.winfo_exists(): return
-        try:
-            self._disp += (self._val - self._disp) * 0.15
-            self._draw()
-        except: pass
-        self.after(40, self._tick)
-    def _draw(self):
-        self.delete("all")
-        s = self.size; cx = cy = s/2; r = s*0.4
-        col = self.color_fn()
-        self.create_arc(cx-r, cy-r, cx+r, cy+r, start=90, extent=-360,
-                        outline=BG1(), width=8, style="arc")
-        if self._disp > 0:
-            self.create_arc(cx-r, cy-r, cx+r, cy+r, start=90,
-                            extent=-360*self._disp,
-                            outline=col, width=8, style="arc")
-        self.create_text(cx, cy, text=f"{int(self._disp*100)}%",
-                         fill=TX(), font=F(15, "bold"))
-
 class HeatBar(tk.Canvas):
-    """Тепловая полоса."""
     def __init__(self, master, height=14, color_fn=None):
         super().__init__(master, height=height, bg=BG2(), highlightthickness=0)
         self.color_fn = color_fn or AC
         self._val = 0.0; self._disp = 0.0
+        self._alive = True
         self.bind("<Configure>", lambda e: self._draw())
+        self.bind("<Destroy>", self._on_destroy)
         self.after(40, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def set(self, v): self._val = max(0, min(1, v))
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
             self._disp += (self._val - self._disp) * 0.15
             self._draw()
@@ -1337,23 +1008,26 @@ class HeatBar(tk.Canvas):
         fw = int(w*self._disp)
         if fw > 0:
             steps = 30
-            base = self.color_fn()
             for i in range(steps):
                 t = i/steps
                 if t > self._disp: break
-                col = lerp(GR() if self._disp<0.6 else (YL() if self._disp<0.85 else RD()),
-                           base, t*0.3)
+                col = GR() if self._disp<0.6 else (YL() if self._disp<0.85 else RD())
                 self.create_rectangle(t*fw, 1, (t+1/steps)*fw, h-1, fill=col, outline="")
 
 class StatusPulse(tk.Canvas):
-    """Статусный круг с пульсацией."""
     def __init__(self, master, size=18, color_fn=None):
         super().__init__(master, width=size, height=size, bg=BG2(), highlightthickness=0)
         self.size = size; self.color_fn = color_fn or GR
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(60, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
-        try: self._draw()
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            if self.winfo_viewable(): self._draw()
         except: pass
         self.after(65, self._tick)
     def _draw(self):
@@ -1367,8 +1041,63 @@ class StatusPulse(tk.Canvas):
                          outline=lerp(BG2(), col, alpha), width=1)
         self.create_oval(cx-4, cy-4, cx+4, cy+4, fill=col, outline="")
 
+class LoadingDots(tk.Canvas):
+    def __init__(self, master, **kw):
+        super().__init__(master, width=60, height=20, bg=BG2(), highlightthickness=0, **kw)
+        self._t = 0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
+        self.after(70, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
+    def _tick(self):
+        if not self._alive or not self.winfo_exists(): return
+        try:
+            if self.winfo_viewable():
+                self._t += 1; self._draw()
+        except: pass
+        self.after(75, self._tick)
+    def _draw(self):
+        self.delete("all")
+        for i in range(3):
+            phase = self._t*0.15 + i*0.7
+            y = 10 - abs(math.sin(phase)) * 6
+            col = lerp(BG2(), AC(), 0.4 + 0.6*abs(math.sin(phase)))
+            self.create_oval(10+i*18-4, y-4, 10+i*18+4, y+4, fill=col, outline="")
+
+class TypewriterLabel(tk.Label):
+    def __init__(self, master, text, delay=40, **kw):
+        super().__init__(master, text="", **kw)
+        self._full = text; self._delay = delay; self._i = 0
+        self.after(300, self._step)
+    def _step(self):
+        if not self.winfo_exists(): return
+        if self._i <= len(self._full):
+            self.configure(text=self._full[:self._i])
+            self._i += 1
+            self.after(self._delay, self._step)
+
+class AnimatedCounter(tk.Label):
+    def __init__(self, master, value=0, fmt=None, **kw):
+        f = fmt or (lambda v: f"{int(v):,}")
+        super().__init__(master, text=f(0), **kw)
+        self._val = 0.0; self._target = value; self._fmt = f
+        self.after(30, self._step)
+    def set(self, v): self._target = v
+    def _step(self):
+        if not self.winfo_exists(): return
+        try:
+            if abs(self._val - self._target) > 0.5:
+                self._val += (self._target - self._val) * 0.15
+                self.configure(text=self._fmt(self._val))
+            else:
+                self._val = self._target
+                self.configure(text=self._fmt(self._val))
+        except: pass
+        self.after(30, self._step)
+
 class Card(tk.Frame):
-    """Карточка с плавным transition границы."""
     def __init__(self, m, r=12, bgc=None, bc=None, px=14, py=12, **kw):
         try: pb = m.cget("bg")
         except: pb = BG()
@@ -1406,16 +1135,15 @@ class Card(tk.Frame):
         c.create_polygon(pts, smooth=True, fill=self._bg, outline=self._cur_bc, width=1)
 
 class Btn(tk.Canvas):
-    """Кнопка с ripple + hover переходом."""
     def __init__(self, m, text, cmd=None, w=180, h=40, bg=None, fg=None,
                  hov=None, bd=None, fnt=None, r=10, pbg=None):
         try: pb = pbg or m.cget("bg")
         except: pb = BG()
         super().__init__(m, width=w, height=h, bg=pb, highlightthickness=0, cursor="hand2")
         self.w, self.h = w, h
-        self.bg_c = bg or AC()
-        self.fg_c = fg or "#04120e"
-        self.hov = hov or AC2()
+        self.bg_c = bg if bg else AC()
+        self.fg_c = fg if fg else "#04120e"
+        self.hov = hov if hov else AC2()
         self.bd = bd; self.r = r; self.cmd = cmd; self.t = text
         self.fnt = fnt or F(11, "bold")
         self.en = True
@@ -1466,7 +1194,6 @@ class Btn(tk.Canvas):
     def txt(self, t): self.t = t; self._draw()
 
 class NavBtn(tk.Frame):
-    """Пункт меню с плавным transition."""
     def __init__(self, m, ic, txt, cmd):
         super().__init__(m, bg=BG1(), height=38, cursor="hand2")
         self.pack_propagate(False)
@@ -1498,7 +1225,6 @@ class NavBtn(tk.Frame):
             self.ind.configure(bg=BG1()); self.il.configure(fg=DIM()); self.tl.configure(fg=MUT())
 
 class Toast(tk.Toplevel):
-    """Всплывающее уведомление с slide-in."""
     def __init__(self, parent, text, kind="info"):
         super().__init__(parent)
         self.overrideredirect(True); self.attributes("-topmost", True)
@@ -1545,9 +1271,7 @@ class Toast(tk.Toplevel):
                 except: pass
         go(1.0)
 
-# ═════════════════════════════════════════════════════════
-# СТРАНИЦЫ
-# ═════════════════════════════════════════════════════════
+# ═══════ СТРАНИЦЫ ═══════
 class Page(tk.Frame):
     def __init__(self, m, app, title, desc=""):
         super().__init__(m, bg=BG()); self.app = app
@@ -1562,7 +1286,6 @@ class Page(tk.Frame):
 class DashboardPage(Page):
     def __init__(self, m, app):
         super().__init__(m, app, "Обзор системы", "Живой мониторинг и защита")
-        # Hero
         hero = Card(self, r=16, py=20); hero.pack(fill="x", padx=26, pady=(12,0))
         hero.set_hover(AC())
         inner = hero.body
@@ -1576,10 +1299,9 @@ class DashboardPage(Page):
                  bg=BG2(), fg=DIM(), font=F(10), anchor="w").pack(anchor="w", pady=(4,12))
         btns = tk.Frame(info, bg=BG2()); btns.pack(anchor="w")
         Btn(btns, "⚡ Быстрая проверка", w=210, h=44, pbg=BG2(), cmd=self._quick).pack(side="left", padx=(0,10))
-        Btn(btns, "🎮 Игровой буст", w=210, h=44, bg=BG3(), fg=DIM(), hov=BR2(),
-            bd=BR(), pbg=BG2(), cmd=lambda: app.go("games")).pack(side="left")
+        Btn(btns, "🌐 Интернет", w=210, h=44, bg=BG3(), fg=DIM(), hov=BR2(),
+            bd=BR(), pbg=BG2(), cmd=lambda: app.go("net")).pack(side="left")
 
-        # Живые круги
         live = tk.Frame(self, bg=BG()); live.pack(fill="x", padx=26, pady=(12,0))
         for i in range(3): live.grid_columnconfigure(i, weight=1, uniform="l")
         gc = Card(live, r=12, py=12); gc.grid(row=0, column=0, sticky="nsew", padx=(0,5))
@@ -1598,7 +1320,6 @@ class DashboardPage(Page):
         self.g_disk = RingGauge(dc.body, size=120, label="Disk", color_fn=PU)
         self.g_disk.pack(pady=4)
 
-        # График и волна
         row2 = tk.Frame(self, bg=BG()); row2.pack(fill="x", padx=26, pady=(12,0))
         for i in range(2): row2.grid_columnconfigure(i, weight=1)
         sp = Card(row2, r=12, py=10); sp.grid(row=0, column=0, sticky="nsew", padx=(0,5))
@@ -1608,7 +1329,6 @@ class DashboardPage(Page):
         tk.Label(wv.body, text="Активность", bg=BG2(), fg=TX(), font=F(11,"bold"), anchor="w").pack(anchor="w")
         self.wave = WaveViz(wv.body, height=70, color_fn=BL); self.wave.pack(fill="x", pady=(4,0))
 
-        # Статистика
         stats = tk.Frame(self, bg=BG()); stats.pack(fill="x", padx=26, pady=(12,0))
         for i in range(4): stats.grid_columnconfigure(i, weight=1, uniform="s")
         cards = [
@@ -1633,7 +1353,6 @@ class DashboardPage(Page):
             tk.Label(c.body, text=label, bg=BG2(), fg=MUT(), font=F(10), anchor="w").pack(anchor="w")
             self.stats[label] = cnt
 
-        # Лог
         lg = Card(self, r=12, py=12); lg.pack(fill="both", expand=True, padx=26, pady=(12,20))
         hdr = tk.Frame(lg.body, bg=BG2()); hdr.pack(fill="x")
         tk.Label(hdr, text="События", bg=BG2(), fg=TX(), font=F(12,"bold")).pack(side="left")
@@ -1940,7 +1659,7 @@ class DiskPage(Page):
 class GamePage(Page):
     def __init__(self, m, app):
         super().__init__(m, app, "Игровой буст", "Освобождение ресурсов")
-        self.boosted = False; self.pids = []
+        self.boosted = False
         bc = Card(self, r=14, py=20); bc.pack(fill="x", padx=26, pady=(12,0))
         inner = bc.body
         tk.Label(inner, text="🎮", bg=BG2(), fg=BL(), font=F(48)).pack(side="left", padx=(8,22))
@@ -2121,7 +1840,6 @@ class SettingsPage(Page):
         body = tk.Frame(cv, bg=BG()); cv.create_window((0,0), window=body, anchor="nw")
         body.bind("<Configure>", lambda e: cv.configure(scrollregion=cv.bbox("all")))
 
-        # ТЕМЫ
         tc = Card(body, r=12, py=14); tc.pack(fill="x", pady=(0,10))
         tk.Label(tc.body, text="🎨 Тема оформления", bg=BG2(), fg=TX(), font=F(13,"bold"), anchor="w").pack(anchor="w", pady=(0,10))
         grid = tk.Frame(tc.body, bg=BG2()); grid.pack(fill="x")
@@ -2135,7 +1853,6 @@ class SettingsPage(Page):
             cv_.create_text(35, 22, text=name, fill="#04120e", font=F(9,"bold"))
             cv_.bind("<Button-1>", lambda e, n=name: self._apply(n))
             tk.Label(b, text=name, bg=BG2(), fg=DIM(), font=F(8)).pack()
-        # кастом
         cc = tk.Frame(tc.body, bg=BG2()); cc.pack(fill="x", pady=(12,0))
         tk.Label(cc, text="Свой цвет:", bg=BG2(), fg=TX(), font=F(10)).pack(side="left", padx=(0,8))
         self.col_prev = tk.Canvas(cc, width=44, height=28, highlightthickness=0, bg=BG2())
@@ -2145,8 +1862,8 @@ class SettingsPage(Page):
             fnt=F(10), cmd=self._pick_color).pack(side="left", padx=(0,8))
         Btn(cc, "Сохранить тему", w=160, h=32, bg=AC(), fg="#04120e", hov=AC2(),
             fnt=F(10), cmd=self._save_theme).pack(side="left")
+        self._pick_col = [TH.AC, TH.AC2, TH.ACS, TH.BL, TH.PU]
 
-        # СИСТЕМА
         s1 = Card(body, r=12, py=14); s1.pack(fill="x", pady=(0,10))
         tk.Label(s1.body, text="Система", bg=BG2(), fg=TX(), font=F(13,"bold"), anchor="w").pack(anchor="w", pady=(0,8))
         self.v_auto = tk.BooleanVar(value=Auto.enabled())
@@ -2157,8 +1874,11 @@ class SettingsPage(Page):
         tk.Checkbutton(s1.body, text="Эвристика при сканировании", variable=self.v_heur,
                        bg=BG2(), fg=TX(), activebackground=BG2(),
                        selectcolor=BG1(), font=F(10), bd=0, highlightthickness=0).pack(anchor="w")
+        self.v_fx = tk.BooleanVar(value=bool(app.cfg.get("fx_heavy", True)))
+        tk.Checkbutton(s1.body, text="Тяжёлые эффекты (Небула, Кометы)",
+                       variable=self.v_fx, bg=BG2(), fg=TX(), activebackground=BG2(),
+                       selectcolor=BG1(), font=F(10), bd=0, highlightthickness=0).pack(anchor="w")
 
-        # ИСТОЧНИКИ
         s3 = Card(body, r=12, py=14); s3.pack(fill="x", pady=(0,10))
         tk.Label(s3.body, text="Источники сигнатур", bg=BG2(), fg=TX(), font=F(13,"bold"), anchor="w").pack(anchor="w", pady=(0,8))
         self.src = tk.Text(s3.body, bg=BG1(), fg=TX(), bd=0, height=6, font=F(9,m=True),
@@ -2172,7 +1892,6 @@ class SettingsPage(Page):
         act = tk.Frame(body, bg=BG()); act.pack(fill="x", pady=(16,10))
         Btn(act, "💾 Сохранить", w=160, cmd=self._save).pack(side="left", padx=(0,10))
         Btn(act, "↻ Сброс", w=120, bg=BG3(), fg=DIM(), hov=BR2(), bd=BR(), cmd=self.refresh).pack(side="left")
-        self._pick_col = [TH.AC, TH.AC2, TH.ACS, TH.BL, TH.PU]
     def _apply(self, name):
         TH.apply(name); TH.save()
         Toast(self.app, f"Тема: {name}", "info")
@@ -2192,31 +1911,261 @@ class SettingsPage(Page):
         Toast(self.app, "Своя тема сохранена", "ok")
         self.app.apply_theme_later()
     def _tga(self):
-        w = bool(self.v_auto.get())
-        r = Auto.toggle()
+        Auto.toggle()
         self.v_auto.set(Auto.enabled())
         Toast(self.app, "Включено" if Auto.enabled() else "Выключено", "ok")
     def refresh(self):
         self.v_auto.set(Auto.enabled())
         self.v_heur.set(bool(self.app.cfg.get("heuristics", True)))
+        self.v_fx.set(bool(self.app.cfg.get("fx_heavy", True)))
         self.src.delete("1.0","end")
         self.src.insert("1.0", "\n".join(self.app.cfg.get("sources", [])))
     def _save(self):
         self.app.cfg["heuristics"] = bool(self.v_heur.get())
+        self.app.cfg["fx_heavy"] = bool(self.v_fx.get())
         self.app.cfg["sources"] = [s.strip() for s in self.src.get("1.0","end").splitlines() if s.strip()]
         if sj(CFG, self.app.cfg): Toast(self.app, "Сохранено", "ok")
 
-# ═════════════════════════════════════════════════════════
-# APP
-# ═════════════════════════════════════════════════════════
+# ═══════ NET PAGE (ИСПРАВЛЕНО) ═══════
+class NetPage(Page):
+    def __init__(self, m, app):
+        super().__init__(m, app, "Оптимизация интернета",
+                         "DNS, TCP/IP, Winsock, пинг, speedtest")
+        self.adapter = ""
+
+        info = Card(self, r=14, py=14); info.pack(fill="x", padx=26, pady=(12,0))
+        info.set_hover(AC())
+        hdr = tk.Frame(info.body, bg=BG2()); hdr.pack(fill="x")
+        tk.Label(hdr, text="Текущее соединение", bg=BG2(), fg=TX(),
+                 font=F(12,"bold")).pack(side="left")
+        StatusPulse(hdr, size=14, color_fn=GR).pack(side="right")
+        self.info_lbl = tk.Label(info.body, text="Загрузка...", bg=BG2(), fg=DIM(),
+                                 font=F(9, m=True), anchor="w", justify="left")
+        self.info_lbl.pack(anchor="w", pady=(6,0))
+
+        grid = tk.Frame(self, bg=BG()); grid.pack(fill="x", padx=26, pady=(12,0))
+        for i in range(3): grid.grid_columnconfigure(i, weight=1)
+        btns = [
+            ("🧹 Flush DNS",      AC(),    lambda: self._do("flush_dns")),
+            ("🔄 Reset Winsock",  YL(),    lambda: self._do("reset_winsock")),
+            ("🔄 Reset TCP/IP",   YL(),    lambda: self._do("reset_tcp")),
+            ("⚡ Cloudflare DNS", BL(),    lambda: self._do("dns_cf")),
+            ("🅖 Google DNS",     BL(),    lambda: self._do("dns_goog")),
+            ("↩ DNS Auto",        BG3(),   lambda: self._do("dns_auto")),
+            ("🚀 TCP Optimize",   PU(),    lambda: self._do("tcp_opt")),
+            ("📡 Reset ARP",      BG3(),   lambda: self._do("arp_reset")),
+            ("🔌 Адаптер",        RD(),    lambda: self._do("adapter_reset")),
+            ("📶 Speedtest",      GR(),    lambda: self._do("speedtest")),
+            ("🏓 Ping test",      BL(),    lambda: self._do("ping")),
+            ("🌐 Обновить инфо",  AC(),    lambda: self._do("info")),
+        ]
+        for i, (label, colf, cmd) in enumerate(btns):
+            if colf == BG3():
+                fg = DIM(); hov = BR2(); bd_c = BR()
+            elif colf == AC():
+                fg = "#04120e"; hov = AC2(); bd_c = None
+            elif colf == YL():
+                fg = "#1a1204"; hov = "#d9a017"; bd_c = None
+            elif colf == RD():
+                fg = "#ffffff"; hov = "#e04b43"; bd_c = None
+            else:
+                fg = "#04120e"; hov = colf; bd_c = None
+            Btn(grid, label, w=200, h=42, bg=colf, fg=fg, hov=hov,
+                bd=bd_c, cmd=cmd).grid(row=i//3, column=i%3,
+                                       padx=4, pady=4, sticky="ew")
+
+        lg = Card(self, r=12, py=12); lg.pack(fill="both", expand=True, padx=26, pady=(12,20))
+        tk.Label(lg.body, text="Лог", bg=BG2(), fg=TX(), font=F(12,"bold"), anchor="w").pack(anchor="w")
+        self.lg = tk.Text(lg.body, bg=BG1(), fg=DIM(), bd=0, font=F(9,m=True),
+                          wrap="word", insertbackground=TX(), highlightthickness=0,
+                          padx=8, pady=6)
+        self.lg.pack(fill="both", expand=True, pady=(6,0))
+        self.lg.tag_config("ok", foreground=AC())
+        self.lg.tag_config("err", foreground=RD())
+        self.lg.tag_config("warn", foreground=YL())
+        self.lg.tag_config("info", foreground=BL())
+        self.lg.tag_config("cmd", foreground=PU())
+
+        self.after(200, self._detect_adapter)
+        self.after(300, self._do, "info")
+
+    def _log(self, t, tag=None):
+        def do():
+            try:
+                self.lg.insert("end", t+"\n", tag or ""); self.lg.see("end")
+            except: pass
+        self.after(0, do)
+
+    def _detect_adapter(self):
+        def w():
+            try:
+                rc, out, _ = run(["wmic","nic","where","NetEnabled=true",
+                                   "get","NetConnectionID"], timeout=10)
+                names = [l.strip() for l in out.splitlines()
+                         if l.strip() and "NetConnection" not in l]
+                self.adapter = names[0] if names else "Wi-Fi"
+                self._log(f"▸ Активный адаптер: {self.adapter}", "info")
+            except:
+                self.adapter = "Wi-Fi"
+        threading.Thread(target=w, daemon=True).start()
+
+    def _do(self, action):
+        def w():
+            try:
+                if action == "info":
+                    self._info()
+                elif action == "flush_dns":
+                    self._log("→ ipconfig /flushdns", "cmd")
+                    rc, out, err = run(["ipconfig","/flushdns"], timeout=15)
+                    self._log(out.strip() or err or "ok", "ok" if rc==0 else "err")
+                elif action == "reset_winsock":
+                    self._log("→ netsh winsock reset (треб. админ)", "cmd")
+                    rc, out, err = run(["netsh","winsock","reset"], timeout=30)
+                    self._log(out.strip() or err, "ok" if rc==0 else "err")
+                    if rc == 0: self._log("⚠ Перезагрузка рекомендуется", "warn")
+                elif action == "reset_tcp":
+                    self._log("→ netsh int ip reset (треб. админ)", "cmd")
+                    rc, out, err = run(["netsh","int","ip","reset"], timeout=30)
+                    self._log(out.strip() or err, "ok" if rc==0 else "err")
+                    if rc == 0: self._log("⚠ Перезагрузка рекомендуется", "warn")
+                elif action in ("dns_cf","dns_goog","dns_auto"):
+                    if not self.adapter: self._detect_adapter(); time.sleep(0.5)
+                    if action == "dns_cf":
+                        d1, d2, label = "1.1.1.1", "1.0.0.1", "Cloudflare"
+                    elif action == "dns_goog":
+                        d1, d2, label = "8.8.8.8", "8.8.4.4", "Google"
+                    else:
+                        self._log(f"→ DNS auto для {self.adapter}", "cmd")
+                        rc1,_,e1 = run(["netsh","interface","ip","set","dns",
+                                        self.adapter,"dhcp"], timeout=15)
+                        rc2,_,e2 = run(["netsh","interface","ipv6","set","dns",
+                                        self.adapter,"dhcp"], timeout=15)
+                        self._log(f"DNS auto: {'ok' if rc1==0 else e1}", "ok" if rc1==0 else "err")
+                        return
+                    self._log(f"→ DNS {label}: {d1}, {d2} на {self.adapter}", "cmd")
+                    rc1,_,e1 = run(["netsh","interface","ip","set","dns",
+                                    self.adapter,"static",d1,"primary"], timeout=15)
+                    rc2,_,e2 = run(["netsh","interface","ip","add","dns",
+                                    self.adapter,d2,"index=2"], timeout=15)
+                    self._log(f"Primary: {'ok' if rc1==0 else e1}  |  Secondary: {'ok' if rc2==0 else e2}",
+                              "ok" if rc1==0 else "err")
+                    run(["ipconfig","/flushdns"], timeout=10)
+                elif action == "tcp_opt":
+                    self._log("→ TCP optimizer", "cmd")
+                    steps = [
+                        (["netsh","int","tcp","set","global","autotuninglevel=normal"], "Auto-tuning normal"),
+                        (["netsh","int","tcp","set","global","rss=enabled"], "RSS enabled"),
+                        (["netsh","int","tcp","set","heuristics","disabled"], "Heuristics off"),
+                        (["netsh","int","tcp","set","global","ecncapability=enabled"], "ECN on"),
+                    ]
+                    for args, label in steps:
+                        rc, _, err = run(args, timeout=10)
+                        self._log(f"  {'✓' if rc==0 else '✗'} {label}", "ok" if rc==0 else "err")
+                    try:
+                        import winreg
+                        base = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
+                        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as root:
+                            i = 0
+                            while True:
+                                try: sub = winreg.EnumKey(root, i); i += 1
+                                except OSError: break
+                                try:
+                                    with winreg.OpenKey(root, sub, 0,
+                                                        winreg.KEY_SET_VALUE) as k:
+                                        winreg.SetValueEx(k, "TcpAckFrequency", 0,
+                                                          winreg.REG_DWORD, 1)
+                                        winreg.SetValueEx(k, "TCPNoDelay", 0,
+                                                          winreg.REG_DWORD, 1)
+                                except: pass
+                        self._log("  ✓ Nagle off (TcpAckFrequency=1, TCPNoDelay=1)", "ok")
+                    except Exception as e:
+                        self._log(f"  ✗ Nagle: {e} (нужен админ)", "err")
+                    self._log("⚠ Перезагрузка рекомендуется", "warn")
+                elif action == "arp_reset":
+                    self._log("→ arp -d *", "cmd")
+                    rc, out, err = run(["arp","-d","*"], timeout=10)
+                    self._log("ok" if rc==0 else (err or "ошибка"), "ok" if rc==0 else "err")
+                elif action == "adapter_reset":
+                    if not self.adapter: self._detect_adapter(); time.sleep(0.5)
+                    if not messagebox.askyesno("Перезапуск адаптера",
+                        f"Отключить и включить «{self.adapter}»?\nСоединение пропадёт на ~5 сек."):
+                        return
+                    self._log(f"→ disable {self.adapter}", "cmd")
+                    run(["netsh","interface","set","interface",
+                         self.adapter,"admin=disable"], timeout=15)
+                    time.sleep(3)
+                    self._log(f"→ enable {self.adapter}", "cmd")
+                    rc,_,err = run(["netsh","interface","set","interface",
+                                    self.adapter,"admin=enable"], timeout=15)
+                    self._log("ok" if rc==0 else err, "ok" if rc==0 else "err")
+                elif action == "speedtest":
+                    self._speedtest()
+                elif action == "ping":
+                    self._ping()
+            except Exception as e:
+                self._log(f"! {e}", "err")
+        threading.Thread(target=w, daemon=True).start()
+
+    def _info(self):
+        rc, out, _ = run(["ipconfig","/all"], timeout=15)
+        keep = []
+        for ln in out.splitlines():
+            if any(k in ln for k in ("Адаптер","adapter","IPv4","IP Address",
+                                      "DNS","Шлюз","Gateway","Основной",
+                                      "Маска","Subnet","DHCP")):
+                keep.append(ln.rstrip())
+        text = "\n".join(keep[:12])
+        def do():
+            self.info_lbl.configure(text=text or "Нет данных")
+            self._log("── Информация о сети ──", "info")
+            self._log(text or "Нет данных")
+        self.after(0, do)
+
+    def _speedtest(self):
+        self._log("── Speedtest (20 МБ с Cloudflare) ──", "info")
+        try:
+            url = "https://speed.cloudflare.com/__down?bytes=20000000"
+            t0 = time.time(); total = 0
+            with urlopen(Request(url, headers={"User-Agent": f"{APP}/{VER}"}),
+                          timeout=60) as r:
+                while True:
+                    b = r.read(65536)
+                    if not b: break
+                    total += len(b)
+                    if time.time()-t0 > 30: break
+            dt = time.time() - t0
+            mbps = (total * 8 / 1_000_000) / dt if dt > 0 else 0
+            self._log(f"  Скачано: {hs(total)}  за  {dt:.2f} с", "ok")
+            self._log(f"  Скорость: {mbps:.2f} Мбит/с  ({mbps/8:.2f} МБ/с)", "ok")
+            try: Toast(self.app, f"{mbps:.1f} Мбит/с", "ok")
+            except: pass
+        except Exception as e:
+            self._log(f"  ✗ {e}", "err")
+
+    def _ping(self):
+        self._log("── Ping test ──", "info")
+        for host in ("8.8.8.8", "1.1.1.1", "ya.ru", "google.com"):
+            try:
+                rc, out, _ = run(["ping","-n","2",host], timeout=10)
+                if rc == 0:
+                    times = re.findall(r"(?:time|время)[=<]\s*(\d+)\s*ms", out, re.I)
+                    avg = int(sum(int(t) for t in times)/len(times)) if times else "?"
+                    tag = "ok" if isinstance(avg, int) and avg < 100 else "warn"
+                    self._log(f"  {host:16}  {avg} ms", tag)
+                else:
+                    self._log(f"  {host:16}  ✗ нет ответа", "err")
+            except Exception as e:
+                self._log(f"  {host:16}  ✗ {e}", "err")
+
+# ═══════ APP ═══════
 class App(tk.Tk):
     def __init__(self, cfg, db):
         super().__init__()
         self.cfg, self.db = cfg, db
+        self._restart_id = None
         self.title(f"{APP} {VER}")
         self.geometry("1320x840"); self.minsize(1150, 720)
         self.configure(bg=BG())
-        self._build_theme_stamp = time.time()
         self.grid_columnconfigure(1, weight=1); self.grid_rowconfigure(0, weight=1)
         self._side(); self._content()
         self.after(200, lambda: round_win(self))
@@ -2238,6 +2187,7 @@ class App(tk.Tk):
         items = [
             ("dashboard","⌂","Главная"),
             ("scan","⌕","Сканирование"),
+            ("net","🌐","Интернет"),
             ("games","🎮","Игры"),
             ("memory","▦","Память"),
             ("disk","⛁","Диск"),
@@ -2258,12 +2208,20 @@ class App(tk.Tk):
         self.cont = tk.Frame(self, bg=BG())
         self.cont.grid(row=0, column=1, sticky="nsew")
         self.cont.grid_rowconfigure(0, weight=1); self.cont.grid_columnconfigure(0, weight=1)
-        # Слои фона
         self.aurora = AuroraBG(self.cont); self.aurora.place(x=0, y=0, relwidth=1, relheight=1)
-        self.nebula = Nebula(self.cont); self.nebula.place(x=0, y=0, relwidth=1, relheight=1)
-        self.stars = StarField(self.cont, count=60); self.stars.place(x=0, y=0, relwidth=1, relheight=1)
-        self.particles = ParticleField(self.cont, count=30); self.particles.place(x=0, y=0, relwidth=1, relheight=1)
-        self.comets = CometTrail(self.cont); self.comets.place(x=0, y=0, relwidth=1, relheight=1)
+        heavy = self.cfg.get("fx_heavy", True)
+        self.nebula = None
+        self.comets = None
+        if heavy:
+            self.nebula = Nebula(self.cont)
+            self.nebula.place(x=0, y=0, relwidth=1, relheight=1)
+        self.stars = StarField(self.cont, count=50)
+        self.stars.place(x=0, y=0, relwidth=1, relheight=1)
+        self.particles = ParticleField(self.cont, count=30)
+        self.particles.place(x=0, y=0, relwidth=1, relheight=1)
+        if heavy:
+            self.comets = CometTrail(self.cont)
+            self.comets.place(x=0, y=0, relwidth=1, relheight=1)
         self.grid_pulse = GridPulse(self.cont); self.grid_pulse.place(x=0, y=0, relwidth=1, relheight=1)
         self.scanline = ScanLine(self.cont); self.scanline.place(x=0, y=0, relwidth=1, relheight=1)
         self.crosshair = Crosshair(self.cont); self.crosshair.place(x=0, y=0, relwidth=1, relheight=1)
@@ -2271,12 +2229,13 @@ class App(tk.Tk):
         self.pages_holder.place(x=0, y=0, relwidth=1, relheight=1)
         self.pages_holder.grid_rowconfigure(0, weight=1); self.pages_holder.grid_columnconfigure(0, weight=1)
         self.pages = {}
-        for k, cls in [("dashboard",DashboardPage),("scan",ScanPage),("games",GamePage),
-                       ("memory",MemPage),("disk",DiskPage),("quarantine",QuarPage),
-                       ("updates",UpdPage),("settings",SettingsPage)]:
+        for k, cls in [("dashboard",DashboardPage),("scan",ScanPage),("net",NetPage),
+                       ("games",GamePage),("memory",MemPage),("disk",DiskPage),
+                       ("quarantine",QuarPage),("updates",UpdPage),("settings",SettingsPage)]:
             p = cls(self.pages_holder, self); p.grid(row=0, column=0, sticky="nsew")
             self.pages[k] = p
     def go(self, k):
+        if k not in self.pages: return
         self.pages[k].tkraise()
         for kk, b in self.navs.items(): b.act(kk == k)
         if hasattr(self.pages[k], "refresh"): self.pages[k].refresh()
@@ -2284,17 +2243,21 @@ class App(tk.Tk):
         u = (self.db.upd or "—")[:10]
         self.ss.configure(text=f"База: {u}\nSHA256: {len(self.db.sha):,}\nТема: {TH.name}")
     def apply_theme_later(self):
-        """Пересоздать окно для применения темы."""
-        Toast(self, "Тема применится при перезапуске. Закрыть сейчас?", "info")
-        self.after(1500, self._ask_restart)
+        if self._restart_id:
+            try: self.after_cancel(self._restart_id)
+            except: pass
+        try:
+            self.deiconify(); self.lift()
+        except: pass
+        Toast(self, "Тема применится после перезапуска", "info")
+        self._restart_id = self.after(1500, self._ask_restart)
     def _ask_restart(self):
+        self._restart_id = None
         if messagebox.askyesno("Перезапуск", "Закрыть приложение для применения темы?"):
             self.destroy()
             os.execl(sys.executable, sys.executable, *sys.argv)
 
-# ═════════════════════════════════════════════════════════
-# SPLASH
-# ═════════════════════════════════════════════════════════
+# ═══════ SPLASH ═══════
 class Splash(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -2308,7 +2271,6 @@ class Splash(tk.Tk):
         round_win(self)
         self.bg1 = AuroraBG(self); self.bg1.place(x=0, y=0, relwidth=1, relheight=1)
         self.bg2 = ParticleField(self, count=25); self.bg2.place(x=0, y=0, relwidth=1, relheight=1)
-        self.bg3 = MatrixRain(self); self.bg3.place(x=0, y=0, relwidth=1, relheight=1)
         main = tk.Frame(self, bg=BG2(), highlightthickness=1, highlightbackground=BR())
         main.place(x=1, y=1, width=w-2, height=h-2)
         self.canvas = tk.Canvas(main, width=140, height=140, bg=BG2(), highlightthickness=0)
@@ -2327,9 +2289,14 @@ class Splash(tk.Tk):
         tk.Label(main, text="Спасибо, что пользуетесь!",
                  bg=BG2(), fg=MUT(), font=F(9)).pack(side="bottom", pady=14)
         self._angle = 0; self._prog = 0.0
+        self._alive = True
+        self.bind("<Destroy>", self._on_destroy)
         self.after(30, self._tick)
+    def _on_destroy(self, e=None):
+        if e and e.widget is not self: return
+        self._alive = False
     def _tick(self):
-        if not self.winfo_exists(): return
+        if not self._alive or not self.winfo_exists(): return
         try:
             self._angle = (self._angle + 6) % 360
             self._draw_logo(); self.progress.set(self._prog)
@@ -2358,17 +2325,18 @@ class Splash(tk.Tk):
                       cx+r*0.4,cy_s-r*0.25, fill="#04120e", width=5,
                       capstyle="round", joinstyle="round")
     def set_status(self, txt, prog=None):
-        self.status.configure(text=txt)
-        if prog is not None: self._prog = prog
-        self.update_idletasks()
+        try:
+            self.status.configure(text=txt)
+            if prog is not None: self._prog = prog
+            self.update_idletasks()
+        except: pass
     def finish(self, cb):
+        self._alive = False
         try: self.destroy()
         except: pass
         cb()
 
-# ═════════════════════════════════════════════════════════
-# MAIN
-# ═════════════════════════════════════════════════════════
+# ═══════ MAIN ═══════
 def main():
     if WIN:
         try: ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -2379,8 +2347,11 @@ def main():
             "https://threatfox.abuse.ch/export/csv/sha256/recent/",
             "https://urlhaus.abuse.ch/downloads/text/"],
             "heuristics": True, "max_file_size_mb": 500, "scan_threads": 4,
-            "last_update": None, "theme": "Mint"})
+            "last_update": None, "theme": "Mint", "fx_heavy": True})
     cfg = lj(CFG, {})
+    for k, v in {"heuristics":True,"max_file_size_mb":500,"scan_threads":4,
+                 "fx_heavy":True,"theme":"Mint"}.items():
+        cfg.setdefault(k, v)
     db = DB()
 
     splash = Splash()
@@ -2398,12 +2369,17 @@ def main():
             def start():
                 app = App(cfg, db)
                 app.mainloop()
-            splash.finish(start)
+            try: splash.finish(start)
+            except Exception as e:
+                print("Splash finish error:", e)
+                app = App(cfg, db)
+                app.mainloop()
             return
         prog, txt = stages[i]
         try: splash.set_status(txt, prog)
         except: pass
-        splash.after(280, lambda: animate(i+1))
+        try: splash.after(280, lambda: animate(i+1))
+        except: pass
     splash.after(400, animate)
     splash.mainloop()
 
